@@ -1,11 +1,10 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from PIL import Image
 import numpy as np
 import io
 import torch
-from torchvision import transforms
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -14,9 +13,9 @@ from langchain.prompts import PromptTemplate
 import uuid
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from model_architucture import CMTNetwork
-app = FastAPI()
+import uvicorn
 
+app = FastAPI()
 
 # Mount static files (CSS, JavaScript)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -24,21 +23,16 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Set up template rendering (for HTML files)
 templates = Jinja2Templates(directory="templates")
 
-
-
 # Load the PyTorch Saudi historical site classification model
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = CMTNetwork(64, 64, 3, 16, 3, 3, 0.20, 0.10).to(device)
-model.load_state_dict(torch.load("best_model_51.pt", map_location=torch.device('cpu')))
-
+model = torch.load("models/saudi_historical_site_model.pt")
 model.eval()
 
 # Load Jais LLM model and tokenizer
-tokenizer = AutoTokenizer.from_pretrained("bert-base-arabertv2")
+tokenizer = AutoTokenizer.from_pretrained("aubmindlab/bert-base-arabertv2")
 llm_model = AutoModelForCausalLM.from_pretrained("abdellab/araGPT2-base")
 
 # Initialize Arabic embeddings model
-embeddings = HuggingFaceEmbeddings(model_name="asafaya/bert-base-arabic")
+embeddings = HuggingFaceEmbeddings(model_name="aubmindlab/bert-base-arabertv2")
 
 # Saudi historical sites information
 saudi_sites_info = [
@@ -100,12 +94,12 @@ session_memories = {}
 
 # Helper function to preprocess the image
 def preprocess_image(image: Image.Image):
-    transforms = transforms.Compose([
-        transforms.Resize((128, 128)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-    image_tensor = transforms(image).unsqueeze(0)
+    transform = torch.nn.Sequential(
+        torch.nn.Resize((224, 224)),
+        torch.nn.ToTensor(),
+        torch.nn.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    )
+    image_tensor = transform(image).unsqueeze(0)
     return image_tensor
 
 # Function to classify Saudi historical sites from images
@@ -160,8 +154,13 @@ def get_response_from_llm(predicted_class: int, user_message: str, session_id: s
 
     return response
 
+# Root endpoint to serve the main page
+@app.get("/")
+async def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
 # Endpoint 1: Upload an image, classify it, and store the result with a session ID
-@app.post("/upload-and-classify/")
+@app.post("/api/upload-and-classify/")
 async def upload_and_classify(file: UploadFile = File(...)):
     if file.content_type not in ["image/jpeg", "image/png"]:
         raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG or PNG images are allowed.")
@@ -180,8 +179,8 @@ async def upload_and_classify(file: UploadFile = File(...)):
     return JSONResponse(content={"session_id": session_id, "predicted_class": predicted_class})
 
 # Endpoint 2: Chat using the classification result based on session ID
-@app.post("/chat/{session_id}")
-async def chat(session_id: str, message: str):
+@app.post("/api/chat/{session_id}")
+async def chat(session_id: str, message: dict):
     # Retrieve the classification result using the session ID
     if session_id not in session_data:
         raise HTTPException(status_code=404, detail="Session ID not found.")
@@ -189,6 +188,9 @@ async def chat(session_id: str, message: str):
     predicted_class = session_data[session_id]
 
     # Get a response from the LLM based on the classification and user message
-    llm_response = get_response_from_llm(predicted_class, message, session_id)
+    llm_response = get_response_from_llm(predicted_class, message["message"], session_id)
 
     return JSONResponse(content={"session_id": session_id, "llm_response": llm_response})
+
+if __name__ == "__main__":
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
