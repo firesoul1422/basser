@@ -11,13 +11,10 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.prompts import PromptTemplate
 import uuid
-from torchvision import transforms
-
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
 from model_architucture import CMTNetwork
-
 app = FastAPI()
 
 # Mount static files (CSS, JavaScript)
@@ -27,15 +24,13 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # Load the PyTorch Saudi historical site classification model
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = CMTNetwork(64, 64, 3, 16, 3, 3, 0.20, 0.10).to(device)
-
+model = CMTNetwork(64, 64, 3, 16, 3, 3, 0.20, 0.10).to("cpu")
 model.load_state_dict(torch.load("best_model_51.pt", map_location=torch.device('cpu')))
 model.eval()
 
 # Load Jais LLM model and tokenizer
-tokenizer = AutoTokenizer.from_pretrained("aubmindlab/bert-base-arabertv2")
-llm_model = AutoModelForCausalLM.from_pretrained("abdellab/araGPT2-base")
+tokenizer = AutoTokenizer.from_pretrained("aubmindlab/aragpt2-base")
+llm_model = AutoModelForCausalLM.from_pretrained("aubmindlab/aragpt2-base", token = "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")
 
 # Initialize Arabic embeddings model
 embeddings = HuggingFaceEmbeddings(model_name="aubmindlab/bert-base-arabertv2")
@@ -68,7 +63,7 @@ saudi_sites_info = [
 ]
 
 # Initialize vector database with Saudi historical sites information
-vector_db = FAISS.from_texts(saudi_sites_info, embeddings=embeddings)
+vector_db = FAISS.from_texts(saudi_sites_info, embedding=embeddings)
 
 # Define Arabic instruction prompt template for Saudi historical sites
 ARABIC_INSTRUCTION_TEMPLATE = """
@@ -100,14 +95,13 @@ session_memories = {}
 
 # Helper function to preprocess the image
 def preprocess_image(image: Image.Image):
-    transforms = transforms.Compose([
-        transforms.Resize((128, 128)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-    image_tensor = transforms(image).unsqueeze(0)
+    transform = torch.nn.Sequential(
+        torch.nn.Resize((224, 224)),
+        torch.nn.ToTensor(),
+        torch.nn.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    )
+    image_tensor = transform(image).unsqueeze(0)
     return image_tensor
-
 
 # Function to classify Saudi historical sites from images
 def classify_image(image: Image.Image):
