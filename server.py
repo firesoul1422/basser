@@ -11,8 +11,19 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.prompts import PromptTemplate
 import uuid
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
+
+
+# Mount static files (CSS, JavaScript)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Set up template rendering (for HTML files)
+templates = Jinja2Templates(directory="templates")
+
+
 
 # Load the PyTorch Saudi historical site classification model
 model = torch.load("path/to/your_saudi_historical_site_model.pt")
