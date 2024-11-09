@@ -29,7 +29,7 @@ templates = Jinja2Templates(directory="templates")
 # Load the PyTorch Saudi historical site classification model
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = CMTNetwork(64, 64, 3, 16, 3, 3, 0.20, 0.10).to(device)
-model.load_state_dict(torch.load("/kaggle/working/best_model_51.pt"))
+model.load_state_dict(torch.load("best_model_51.pt"))
 
 model.eval()
 
