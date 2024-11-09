@@ -22,7 +22,7 @@ document.getElementById('uploadBtn').addEventListener('click', async function() 
     formData.append('file', file);
 
     try {
-        const response = await fetch(`${serverUrl}/upload-and-classify/`, {
+        const response = await fetch(`${serverUrl}/api/upload-and-classify/`, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin'
@@ -58,7 +58,7 @@ async function sendMessage() {
     messageInput.value = '';
 
     try {
-        const response = await fetch(`${serverUrl}/chat/${sessionId}`, {
+        const response = await fetch(`${serverUrl}/api/chat/${sessionId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
