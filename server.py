@@ -5,6 +5,7 @@ from PIL import Image
 import numpy as np
 import io
 import torch
+from torchvision import transforms
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -13,7 +14,7 @@ from langchain.prompts import PromptTemplate
 import uuid
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
+from model_architucture import CMTNetwork
 app = FastAPI()
 
 
@@ -26,7 +27,10 @@ templates = Jinja2Templates(directory="templates")
 
 
 # Load the PyTorch Saudi historical site classification model
-model = torch.load("path/to/your_saudi_historical_site_model.pt")
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+model = CMTNetwork(64, 64, 3, 16, 3, 3, 0.20, 0.10).to(device)
+model.load_state_dict(torch.load("/kaggle/working/best_model_51.pt"))
+
 model.eval()
 
 # Load Jais LLM model and tokenizer
@@ -96,12 +100,12 @@ session_memories = {}
 
 # Helper function to preprocess the image
 def preprocess_image(image: Image.Image):
-    transform = torch.nn.Sequential(
-        torch.nn.Resize((224, 224)),
-        torch.nn.ToTensor(),
-        torch.nn.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    )
-    image_tensor = transform(image).unsqueeze(0)
+    transforms = transforms.Compose([
+        transforms.Resize((128, 128)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    image_tensor = transforms(image).unsqueeze(0)
     return image_tensor
 
 # Function to classify Saudi historical sites from images
